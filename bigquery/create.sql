@@ -104,5 +104,6 @@ CREATE TABLE test.hits
     HasGCLID SMALLINT NOT NULL,
     RefererHash BIGINT NOT NULL,
     URLHash BIGINT NOT NULL,
-    CLID INTEGER NOT NULL
-);
+    CLID INTEGER NOT NULL,
+)
+CLUSTER BY CounterID, EventDate, UserID, EventTime;
