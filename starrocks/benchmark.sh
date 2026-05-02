@@ -28,6 +28,13 @@ fe/bin/start_fe.sh --daemon
 
 # Start Backend
 printf "\nstorage_root_path = ${STARROCKS_HOME}/storage\n" >> be/conf/be.conf
+# Disable internal caches so that the cold run (1st of 3 tries) is actually cold.
+# Without this, the BE process keeps decoded data in its own in-memory page cache
+# (`storage_page_cache`, default ~20% of RAM) which `drop_caches` does not clear,
+# so first-run timings reflect a warm cache and underreport cold-run latency.
+# `datacache_enable=false` covers the unified Data Cache (page + block) path in v3.3+.
+printf "\ndisable_storage_page_cache = true\n" >> be/conf/be.conf
+printf "\ndatacache_enable = false\n" >> be/conf/be.conf
 be/bin/start_be.sh --daemon
 
 # Setup cluster
