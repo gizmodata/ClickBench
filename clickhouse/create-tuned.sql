@@ -107,6 +107,4 @@ CREATE OR REPLACE TABLE hits
     CLID INTEGER NOT NULL,
     PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID)
 )
-ENGINE = MergeTree
-SETTINGS index_granularity = 1024,
-         fsync_after_insert = 1; -- https://github.com/ClickHouse/ClickBench/issues/678
+SETTINGS index_granularity = 1024;
