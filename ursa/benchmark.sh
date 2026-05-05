@@ -23,7 +23,6 @@ sudo chown clickhouse:clickhouse user_files/hits_*.parquet
 
 echo -n "Load time: "
 ./ursa client --time --query "INSERT INTO hits SELECT * FROM file('hits_*.parquet')" --max-insert-threads $(( $(nproc) / 4 ))
-./ursa client --query "SYSTEM SYNC FILE CACHE"
 
 # Run the queries
 
