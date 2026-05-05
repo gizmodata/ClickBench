@@ -52,7 +52,7 @@ sync
 start=$(date +%s.%N)
 
 clickhouse-client --query "INSERT INTO hits SELECT * FROM file('hits_*.parquet')" --max-insert-threads $(( $(nproc) / 4 ))
-clickhouse-client --query "SYSTEM SYNC FILE CACHE"
+sync
 
 end=$(date +%s.%N)
 elapsed=$(echo "$end - $start" | bc)
