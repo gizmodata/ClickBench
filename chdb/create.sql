@@ -110,5 +110,4 @@ CREATE TABLE IF NOT EXISTS hits
     URLHash BIGINT NOT NULL,
     CLID INTEGER NOT NULL,
     PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID)
-)
-ENGINE = MergeTree;
+);

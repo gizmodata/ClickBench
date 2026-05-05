@@ -106,6 +106,4 @@ CREATE OR REPLACE TABLE hits
     URLHash BIGINT NOT NULL,
     CLID INTEGER NOT NULL,
     PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID)
-)
-ENGINE = MergeTree
-SETTINGS fsync_after_insert = 1; -- https://github.com/ClickHouse/ClickBench/issues/678
+);

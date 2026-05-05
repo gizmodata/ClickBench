@@ -43,7 +43,7 @@ if [[ $(./clickhouse client --query "EXISTS hits") == '1' && $(./clickhouse clie
 else
     echo "Will download the dataset"
     ./clickhouse client --receive_timeout 1000 --max_insert_threads $(nproc || sysctl -n hw.logicalcpu || echo 4) --progress --query "
-        CREATE OR REPLACE TABLE hits ENGINE = MergeTree PARTITION BY toYYYYMM(EventDate) ORDER BY (CounterID, EventDate, intHash32(UserID), EventTime)
+        CREATE OR REPLACE TABLE hits PARTITION BY toYYYYMM(EventDate) ORDER BY (CounterID, EventDate, intHash32(UserID), EventTime)
         AS SELECT * FROM url('https://datasets.clickhouse.com/hits/native/hits_100m_obfuscated_{0..255}.native.zst')"
 
     ./clickhouse client --query "SELECT 'The dataset size is: ', count() FROM hits"
