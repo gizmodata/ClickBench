@@ -9,7 +9,7 @@ ROOT=$(pwd)
 if [[ -n "$1" ]]; then
     url="$1"
 else
-    url='https://apache-doris-releases.oss-accelerate.aliyuncs.com/apache-doris-2.1.7-rc01-bin-x64.tar.gz'
+    url='https://apache-doris-releases.oss-accelerate.aliyuncs.com/apache-doris-4.1.0-rc01-bin-x64.tar.gz'
 fi
 # Download
 file_name="$(basename ${url})"
@@ -24,21 +24,20 @@ dir_name="${file_name/.tar.gz/}"
 
 # Try to stop Doris and remove it first if execute this script multiple times
 set +e
-"$dir_name"/apache-doris-2.1.7-rc01-bin-x64/fe/bin/stop_fe.sh
-"$dir_name"/apache-doris-2.1.7-rc01-bin-x64/be/bin/stop_be.sh
+"$dir_name"/"$dir_name"/fe/bin/stop_fe.sh
+"$dir_name"/"$dir_name"/be/bin/stop_be.sh
 rm -rf "$dir_name"
 set -e
 
 # Uncompress
 mkdir "$dir_name"
 tar zxf "$file_name" -C "$dir_name"
-DORIS_HOME="$ROOT/$dir_name/apache-doris-2.1.7-rc01-bin-x64"
+DORIS_HOME="$ROOT/$dir_name/$dir_name"
 export DORIS_HOME
 
 # Install dependencies
 sudo apt-get update -y
-sudo apt-get install -y openjdk-17-jdk
-sudo apt-get install -y mysql-client
+sudo apt-get install -y openjdk-17-jdk mysql-client
 export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-$(dpkg --print-architecture)/"
 export PATH=$JAVA_HOME/bin:$PATH
 
@@ -89,34 +88,160 @@ sleep 5
 mysql -h 127.0.0.1 -P9030 -uroot hits <"$ROOT"/create.sql
 
 # Download data
-if [[ ! -f hits.tsv.gz ]] && [[ ! -f hits.tsv ]]; then
-    sudo apt-get install -y pigz
-    wget --continue --progress=dot:giga 'https://datasets.clickhouse.com/hits_compatible/hits.tsv.gz'
-    pigz -d -f hits.tsv.gz
-fi
+BE_DATA_DIR="$DORIS_HOME/be/"
+mkdir -p "$BE_DATA_DIR/user_files_secure"
 
-# Load data
-echo "start loading hits.tsv, estimated to take about 9 minutes ..."
-date
+seq 0 99 | xargs -P100 -I{} bash -c 'wget --continue --progress=dot:giga https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_{}.parquet'
+mv *.parquet "$BE_DATA_DIR/user_files_secure" 
+
+BE_ID=$(mysql -h127.0.0.1 -P9030 -uroot -N -e 'show backends' | awk '{print $1}' | head -1)
+
+CORES=$(nproc)
+PARALLEL_NUM=$((CORES / 4))
+if [ "$PARALLEL_NUM" -lt 1 ]; then
+    echo "Computed parallel_pipeline_task_num ($PARALLEL_NUM) is less than 1 based on $CORES cores; clamping to 1."
+    PARALLEL_NUM=1
+fi
+echo "Setting parallel_pipeline_task_num to $PARALLEL_NUM (cpu cores: $CORES, computed as CORES/4 with min 1)"
+
+echo "start loading hits.parquet using TVF, estimated to take about 3 minutes ..."
 START=$(date +%s)
-curl --location-trusted \
-    -u root: \
-    -T "hits.tsv" \
-    -H "label:hits" \
-    -H "columns: WatchID,JavaEnable,Title,GoodEvent,EventTime,EventDate,CounterID,ClientIP,RegionID,UserID,CounterClass,OS,UserAgent,URL,Referer,IsRefresh,RefererCategoryID,RefererRegionID,URLCategoryID,URLRegionID,ResolutionWidth,ResolutionHeight,ResolutionDepth,FlashMajor,FlashMinor,FlashMinor2,NetMajor,NetMinor,UserAgentMajor,UserAgentMinor,CookieEnable,JavascriptEnable,IsMobile,MobilePhone,MobilePhoneModel,Params,IPNetworkID,TraficSourceID,SearchEngineID,SearchPhrase,AdvEngineID,IsArtifical,WindowClientWidth,WindowClientHeight,ClientTimeZone,ClientEventTime,SilverlightVersion1,SilverlightVersion2,SilverlightVersion3,SilverlightVersion4,PageCharset,CodeVersion,IsLink,IsDownload,IsNotBounce,FUniqID,OriginalURL,HID,IsOldCounter,IsEvent,IsParameter,DontCountHits,WithHash,HitColor,LocalEventTime,Age,Sex,Income,Interests,Robotness,RemoteIP,WindowName,OpenerName,HistoryLength,BrowserLanguage,BrowserCountry,SocialNetwork,SocialAction,HTTPError,SendTiming,DNSTiming,ConnectTiming,ResponseStartTiming,ResponseEndTiming,FetchTiming,SocialSourceNetworkID,SocialSourcePage,ParamPrice,ParamOrderID,ParamCurrency,ParamCurrencyID,OpenstatServiceName,OpenstatCampaignID,OpenstatAdID,OpenstatSourceID,UTMSource,UTMMedium,UTMCampaign,UTMContent,UTMTerm,FromTag,HasGCLID,RefererHash,URLHash,CLID" \
-    http://localhost:8030/api/hits/hits/_stream_load
+mysql -h 127.0.0.1 -P9030 -uroot hits -e "SET parallel_pipeline_task_num = $PARALLEL_NUM;\
+INSERT INTO hits SELECT
+    CounterID,
+    DATE_ADD('1970-01-01', INTERVAL EventDate DAY) AS EventDate,
+    UserID,
+    FROM_UNIXTIME(EventTime) AS EventTime,
+    WatchID,
+    JavaEnable,
+    Title,
+    GoodEvent,
+    ClientIP,
+    RegionID,
+    CounterClass,
+    OS,
+    UserAgent,
+    URL,
+    Referer,
+    IsRefresh,
+    RefererCategoryID,
+    RefererRegionID,
+    URLCategoryID,
+    URLRegionID,
+    ResolutionWidth,
+    ResolutionHeight,
+    ResolutionDepth,
+    FlashMajor,
+    FlashMinor,
+    FlashMinor2,
+    NetMajor,
+    NetMinor,
+    UserAgentMajor,
+    UserAgentMinor,
+    CookieEnable,
+    JavascriptEnable,
+    IsMobile,
+    MobilePhone,
+    MobilePhoneModel,
+    Params,
+    IPNetworkID,
+    TraficSourceID,
+    SearchEngineID,
+    SearchPhrase,
+    AdvEngineID,
+    IsArtifical,
+    WindowClientWidth,
+    WindowClientHeight,
+    ClientTimeZone,
+    FROM_UNIXTIME(ClientEventTime) AS ClientEventTime,
+    SilverlightVersion1,
+    SilverlightVersion2,
+    SilverlightVersion3,
+    SilverlightVersion4,
+    PageCharset,
+    CodeVersion,
+    IsLink,
+    IsDownload,
+    IsNotBounce,
+    FUniqID,
+    OriginalURL,
+    HID,
+    IsOldCounter,
+    IsEvent,
+    IsParameter,
+    DontCountHits,
+    WithHash,
+    HitColor,
+    FROM_UNIXTIME(LocalEventTime) AS LocalEventTime,
+    Age,
+    Sex,
+    Income,
+    Interests,
+    Robotness,
+    RemoteIP,
+    WindowName,
+    OpenerName,
+    HistoryLength,
+    BrowserLanguage,
+    BrowserCountry,
+    SocialNetwork,
+    SocialAction,
+    HTTPError,
+    SendTiming,
+    DNSTiming,
+    ConnectTiming,
+    ResponseStartTiming,
+    ResponseEndTiming,
+    FetchTiming,
+    SocialSourceNetworkID,
+    SocialSourcePage,
+    ParamPrice,
+    ParamOrderID,
+    ParamCurrency,
+    ParamCurrencyID,
+    OpenstatServiceName,
+    OpenstatCampaignID,
+    OpenstatAdID,
+    OpenstatSourceID,
+    UTMSource,
+    UTMMedium,
+    UTMCampaign,
+    UTMContent,
+    UTMTerm,
+    FromTag,
+    HasGCLID,
+    RefererHash,
+    URLHash,
+    CLID
+FROM local(
+    \"file_path\" = \"user_files_secure/hits_*.parquet\",
+    \"backend_id\" = \"$BE_ID\",
+    \"format\" = \"parquet\"
+)
+"
 END=$(date +%s)
 LOADTIME=$(echo "$END - $START" | bc)
 echo "Load time: $LOADTIME"
 echo "$LOADTIME" > loadtime
 
-# Dataset contains 99997497 rows, storage size is about 17319588503 bytes
-mysql -h 127.0.0.1 -P9030 -uroot hits -e "SELECT count(*) FROM hits"
-du -bs "$DORIS_HOME"/be/storage/ | cut -f1 | tee storage_size
 
+du -bs "$DORIS_HOME"/be/storage/ | cut -f1 | tee storage_size
 echo "Data size: $(cat storage_size)"
 
-./run.sh 2>&1 | tee -a log.txt
+mysql -h 127.0.0.1 -P9030 -uroot hits -e "set global enable_sql_cache = false"
+# Dataset contains 99997497 rows, storage size is about 13319588503 bytes
+mysql -h 127.0.0.1 -P9030 -uroot hits -e "SELECT count(*) FROM hits"
+
+# Run queries
+TRIES=3
+while read -r query; do
+    sync
+    echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
+
+    for i in $(seq 1 $TRIES); do
+        mysql -vvv -h127.1 -P9030 -uroot hits -e "${query}" 2>&1 | tee -a log.txt
+    done
+done <queries.sql
 
 cat log.txt |
   grep -P 'rows? in set|Empty set|^ERROR' |

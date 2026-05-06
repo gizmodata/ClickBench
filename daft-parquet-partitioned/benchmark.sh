@@ -7,7 +7,7 @@ python3 -m venv myenv
 source myenv/bin/activate
 pip install pandas
 pip install packaging
-pip install daft==0.4.13
+pip install daft==0.7.4
 
 seq 0 99 | xargs -P100 -I{} bash -c 'wget --continue --progress=dot:giga https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_{}.parquet'
 

@@ -93,7 +93,7 @@ fi
 
 # If no valid token yet, try to extract from logs (first run scenario)
 if [ -z "$ARC_TOKEN" ]; then
-    ARC_TOKEN=$(sudo journalctl -u arc --no-pager | grep -oP 'Initial admin API token: \K[^\s]+' | head -1)
+    ARC_TOKEN=$(sudo journalctl -u arc --no-pager | grep -oP '(?:Initial admin API token|Admin API token): \K[^\s]+' | head -1)
     if [ -n "$ARC_TOKEN" ]; then
         echo "[OK] Captured new token from logs"
         echo "$ARC_TOKEN" > arc_token.txt

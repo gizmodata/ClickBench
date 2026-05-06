@@ -124,6 +124,7 @@ if __name__ == "__main__":
         "machine": f"Motherduck: {instance_type}",
         "cluster_size": 1,
         "proprietary": "yes",
+        "hardware": "cpu",
         "tuned": "no",
         "tags": ["C++", "column-oriented", "serverless", "managed"],
     }
