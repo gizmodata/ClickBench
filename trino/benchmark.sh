@@ -14,6 +14,11 @@ wget --continue --progress=dot:giga 'https://datasets.clickhouse.com/hits_compat
 mkdir -p data/hits
 ln -f hits.parquet data/hits/hits.parquet
 
+# The Trino container runs as uid 1000 ("trino"), and writes the file
+# metastore into this directory. Make sure that uid can write here even
+# when benchmark.sh runs as root (cloud-init).
+sudo chown -R 1000:1000 data
+
 # Trino catalog configuration: Hive connector backed by a file metastore
 # stored on the local filesystem, no Hadoop or external metastore required.
 mkdir -p etc/catalog
