@@ -5,9 +5,7 @@ sudo apt-get update -y
 sudo apt-get install -y docker.io postgresql-client
 
 # download dataset
-echo "Downloading dataset..."
-mkdir -p data
-wget --continue --progress=dot:giga -O data/hits.parquet 'https://datasets.clickhouse.com/hits_compatible/athena/hits.parquet'
+../download-hits-parquet-single data
 chmod -R 777 data
 rm -rf db
 mkdir db
