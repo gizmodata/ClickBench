@@ -4,8 +4,8 @@
 export HOME=/home/ubuntu
 
 # Install requirements
-apt-get update -y
-apt install unzip netcat-openbsd -y
+sudo apt-get update -y
+sudo apt-get install -y unzip netcat-openbsd
 
 # Detect architecture (maps x86_64->amd64, aarch64->arm64)
 ARCH=$(uname -m)
@@ -15,10 +15,12 @@ elif [ "$ARCH" = "aarch64" ]; then
     ARCH="arm64"
 fi
 
-# Install the GizmoSQL server and client (gizmosql_client is the CLI shell)
+# Install the GizmoSQL server and client (gizmosql_client is the CLI shell) into a local directory
+mkdir -p ./bin
 curl -L -o gizmosql.zip "https://github.com/gizmodata/gizmosql/releases/latest/download/gizmosql_cli_linux_${ARCH}.zip"
-unzip gizmosql.zip
-mv gizmosql_server gizmosql_client /usr/local/bin/
+unzip -o gizmosql.zip -d ./bin
+chmod +x ./bin/gizmosql_server ./bin/gizmosql_client
+export PATH="$PWD/bin:$PATH"
 
 # Source our env vars and utility functions for starting/stopping gizmosql server
 . util.sh
