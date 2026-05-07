@@ -6,13 +6,12 @@ set -e
 sudo apt-get update -y
 sudo apt-get install -y docker.io bc
 
-# Download the dataset.
-wget --continue --progress=dot:giga 'https://datasets.clickhouse.com/hits_compatible/hits.parquet'
-
-# Place the parquet file inside its own directory; the Hive connector
-# reads every file in the table's external_location.
+# Download the partitioned dataset (100 parquet files).
 mkdir -p data/hits
-ln -f hits.parquet data/hits/hits.parquet
+cd data/hits
+seq 0 99 | xargs -P16 -I{} wget --continue --quiet \
+    "https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_{}.parquet"
+cd ../..
 
 # The Trino container runs as uid 1000 ("trino"), and writes the file
 # metastore into this directory. Make sure that uid can write here even
@@ -31,8 +30,8 @@ fs.native-local.enabled=true
 hive.non-managed-table-writes-enabled=true
 EOF
 
-# Start the Trino server. The container exposes the data dir as
-# /clickbench so it matches local.location above.
+# Start the Trino server. The data dir is exposed at /clickbench so it
+# matches local.location above.
 sudo docker rm -f trino 2>/dev/null || true
 sudo docker run -d --name trino \
     -p 8080:8080 \
@@ -46,8 +45,8 @@ until sudo docker logs trino 2>&1 | grep -q "SERVER STARTED"; do
 done
 sleep 3
 
-# Create the schema, the external table over the parquet file, and a view
-# that exposes the ClickBench EventTime/EventDate column types.
+# Create the schema, the external table over the parquet directory and a
+# view that exposes the standard ClickBench column types.
 LOAD_START=$(date +%s)
 sudo docker cp create.sql trino:/tmp/create.sql
 sudo docker exec -i trino trino --file /tmp/create.sql
@@ -57,4 +56,4 @@ LOAD_END=$(date +%s)
 ./run.sh 2>&1 | tee log.txt
 
 echo "Load time: $((LOAD_END - LOAD_START))"
-echo "Data size: $(stat -c %s hits.parquet)"
+echo "Data size: $(du -bcs data/hits/*.parquet | tail -n1 | cut -f1)"
